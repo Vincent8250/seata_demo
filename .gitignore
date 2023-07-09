@@ -1,3 +1,6 @@
 /.idea/
 /target/
 /seata_demo.iml
+/store/target/
+/order/target/
+/common/target/
