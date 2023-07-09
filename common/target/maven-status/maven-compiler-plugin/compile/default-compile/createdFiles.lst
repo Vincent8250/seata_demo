@@ -1,0 +1,4 @@
+cn\vincent\entity\Order$OrderBuilder.class
+cn\vincent\entity\Stock$StockBuilder.class
+cn\vincent\entity\Stock.class
+cn\vincent\entity\Order.class

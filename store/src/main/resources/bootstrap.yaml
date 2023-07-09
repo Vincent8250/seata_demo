@@ -1,0 +1,22 @@
+server:
+  port: 1010
+
+spring:
+  application:
+    name: store-service
+  cloud:
+    nacos:
+      server-addr: 127.0.0.1:8848
+      username: nacos
+      password: nacos
+      config:
+        namespace: seata
+        shared-configs:
+          - data-id: mysql.yaml
+            group: MYSQL_CONFIG
+            refresh: true
+          - data-id: my-data.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+      discovery:
+        namespace: seata
