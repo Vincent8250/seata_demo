@@ -2,8 +2,10 @@ package cn.vincent.controller;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.vincent.entity.Order;
+import cn.vincent.entity.Product;
 import cn.vincent.entity.Stock;
 import cn.vincent.handler.BlockExceptionHandler;
+import cn.vincent.service.IProductService;
 import cn.vincent.service.IStockService;
 import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.alibaba.csp.sentinel.slots.block.AbstractRule;
@@ -30,8 +32,12 @@ public class StockController {
     @Autowired
     IStockService iStockService;
 
+    @Autowired
+    IProductService iProductService;
+
     /**
      * 扣减库存
+     *
      * @param order
      * @return
      */
@@ -59,8 +65,11 @@ public class StockController {
         return stock;
     }
 
+    //region sentinel 测试
+
     /**
      * sentinel 测试
+     *
      * @return
      */
     @GetMapping("/getStock")
@@ -71,6 +80,7 @@ public class StockController {
 
     /**
      * 限流处理
+     *
      * @param blockException
      * @return
      */
@@ -78,5 +88,23 @@ public class StockController {
         AbstractRule rule = blockException.getRule();
         String resource = rule.getResource();
         return resource + "限流了";
+    }
+    //endregion
+
+    @GetMapping("/addStock/{proName}/{total}")
+    public String addStock(@PathVariable("proName") String proName, @PathVariable("total") Integer total) {
+        QueryWrapper<Product> productQueryWrapper = new QueryWrapper<>();
+        productQueryWrapper.eq("name", proName);
+        Product product = iProductService.getOne(productQueryWrapper);
+        if (ObjectUtil.isNotEmpty(product)) {
+            Stock stock = Stock.builder()
+                    .productId(product.getId())
+                    .productName(product.getName())
+                    .total(total)
+                    .build();
+            Boolean flag = iStockService.save(stock);
+            return flag.toString();
+        } else
+            return Boolean.FALSE.toString();
     }
 }

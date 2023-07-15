@@ -23,3 +23,27 @@ spring:
     sentinel:
       transport:
         dashboard: localhost:8080
+seata:
+  data-source-proxy-mode: XA
+  tx-service-group: tc-seata
+  service:
+    vgroup-mapping:
+      tc-seata: default
+  registry:
+    type: nacos
+    nacos:
+      namespace: seata
+      username: nacos
+      password: nacos
+      server-addr: 127.0.0.1:8848
+#  config:
+#    type: nacos
+#    nacos:
+#      namespace: seata
+#      username: nacos
+#      password: nacos
+#      server-addr: 127.0.0.1:8848
+#      data-id: seata-server.yaml
+
+
+

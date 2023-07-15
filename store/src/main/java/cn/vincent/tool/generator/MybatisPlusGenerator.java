@@ -33,7 +33,7 @@ public class MybatisPlusGenerator {
                             .pathInfo(Collections.singletonMap(OutputFile.xml, "E:\\文件\\Developer\\Demo\\Rear-end\\Java\\study_project\\seata_demo\\store\\src\\main\\resources\\mapper")); // 设置mapperXml生成路径
                 })
                 .strategyConfig(builder -> {
-                    builder.addInclude("stock") // 设置需要生成的表名
+                    builder.addInclude("product") // 设置需要生成的表名
                             .addTableSuffix("_0") // 设置过滤表后缀
                             .addTablePrefix("t_", "c_") // 设置过滤表前缀
                             .entityBuilder().enableFileOverride(); // 实体生成时覆盖

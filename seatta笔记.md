@@ -49,7 +49,7 @@ base理论时对cap的以重解决思路 包含三个思想
 
 #### 角色
 
-- TC - 事务协调者：维护全局和分支事务的状态 协调全局事务的提交和回滚
+- TC - 事务协调者：维护全局和分支事务的状态 协调全局事务的提交和回滚 （TC是一个单独的服务）
 
 - TM - 事务管理器：定义全局事务的范围、开始全局事务、提交或回滚全局事务
 
@@ -243,6 +243,13 @@ base理论时对cap的以重解决思路 包含三个思想
 
 ### 环境依赖
 
+~~~xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+</dependency>
+~~~
+
 
 
 
@@ -253,10 +260,89 @@ base理论时对cap的以重解决思路 包含三个思想
 
 ## 解决方案：
 
-- XA：
-- TCC：
-- AT：
-- SAGA：
+### XA
+
+#### 概念
+
+- 优点：
+  - 强一致性
+  - 大多数据都支持
+    所以seata也只是在数据库接口层面进行了一层封装
+  - 实现简单 没有代码侵入
+- 缺点：
+  - 强一致性导致的性能低下（资源会被上锁）
+  - 依赖数据库底层支持（传统关系型数据库没问题 redis之类非关系型数据库不支持XA模式的就不行了）
+
+
+
+
+XA模式将分布式事务定义为两段
+
+1. 一阶段：事务管理器通知资源管理器开始执行业务
+   资源管理器返回执行结果（是否成功）
+
+   <img src="img/image-20230715225535483.png" alt="image-20230715225535483" style="zoom:80%;float: left" /><img src="img/image-20230715225916356.png" alt="image-20230715225916356" style="zoom:80%;" />
+
+2. 二阶段：事务管理器通过各个资源管理返回的执行结果判断提交或回滚
+
+   <img src="img/image-20230715230054874.png" alt="image-20230715230054874" style="zoom:80%;float:left;" /><img src="img/image-20230715230152977.png" alt="image-20230715230152977" style="zoom:80%;" />
+
+
+
+#### Seata XA模型
+
+seata的XA模型做了一些调整 但大体思路是一致的
+主要是seata的服务中做了一层RM
+RM的主要任务是向TC注册分支事务、报告事务状态（实际的执行、提交、回滚逻辑是数据库来实现）
+
+![image-20230715230909779](img/image-20230715230909779.png)
+
+
+
+#### 代码实现
+
+1. 配置文件修改
+
+   ~~~yaml
+   seata:
+     data-source-proxy-mode: XA # 事务模型
+     tx-service-group: tc-seata # 事务组
+     service:
+       vgroup-mapping: # 事务组与cluster的映射关系
+         tc-seata: default # 没有设置cluster 所以默认default
+     registry: 
+       type: nacos # 注册中心类型
+       nacos: # 注册中心信息
+         namespace: seata
+         username: nacos
+         password: nacos
+         server-addr: 127.0.0.1:8848
+   ~~~
+
+   服务成功注册到TC服务中
+   ![image-20230716004422031](img/image-20230716004422031.png)
+
+
+
+
+
+
+
+
+
+### TCC
+
+
+
+
+
+### AT
+
+
+
+
+
+### SAGA
 
 
 
