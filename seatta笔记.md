@@ -260,6 +260,108 @@ base理论时对cap的以重解决思路 包含三个思想
 
 ## 解决方案：
 
+### 依赖环境
+
+~~~xml
+        <!-- region spring-boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- SpringBoot2.4之后不会默认加载bootstrap.yaml 需要添加依赖才行 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+        <!-- endregion -->
+
+        <!-- region spring-cloud alibaba-->
+
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+        </dependency>
+        <!-- endregion -->
+
+        <!-- region tool-->
+
+        <dependency>
+            <groupId>cn.vincent</groupId>
+            <artifactId>common</artifactId>
+            <version>1.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-core</artifactId>
+            <version>5.8.15</version>
+        </dependency>
+
+        <!-- endregion -->
+
+        <!-- region dataSource -->
+        <!-- seata 在使用最新版的mysql驱动器得时候有问题 需要退回到之前的版本 -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.11</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>3.5.3.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-generator</artifactId>
+            <version>3.5.3.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-freemarker</artifactId>
+        </dependency>
+        <!-- endregion -->
+~~~
+
+
+
+
+
+
+
 ### XA
 
 #### 概念
@@ -321,8 +423,47 @@ RM的主要任务是向TC注册分支事务、报告事务状态（实际的执�
 
    服务成功注册到TC服务中
    ![image-20230716004422031](img/image-20230716004422031.png)
+   
+2. 通过 `@GlobalTransactional` 注解标注开启全局事务 并在服务提供方抛出异常
+
+   <img src="img/image-20230718223546062.png" alt="image-20230718223546062" style="zoom: 67%;" /><img src="img/image-20230718224806213.png" alt="image-20230718224806213" style="zoom: 50%;" />
+   
+3. 观察TC控制台 可以看到输出  Rollback branch transaction successfully
+   ![image-20230718225224634](img/image-20230718225224634.png)
 
 
+
+
+
+### AT
+
+#### 概念
+
+**AT模式同样是两阶段提交的事务模型** 不过弥补了XA模型中资源锁定周期过长的缺陷
+
+AT模式下 RM管理器中资源会直接提交 不用等待所有资源都提交
+
+
+
+#### AT模型
+
+- 一阶段：
+  - RM注册分支事务
+  - 记录undo-log（数据快照 用于回滚）
+  - 执行业务sql并提交
+  - 报告事务状态
+- 二阶段
+  - TM通知TC事务完成 TC检查分支事务状态
+    - 分支事务成功 - RM删除log
+    - 分支事务失败 - 通过log回滚
+
+![image-20230718225857833](img/image-20230718225857833.png)
+
+#### XA区别
+
+- XA是追求强一致性  AT是追求结果一致性
+- XA在一阶段的时候不提交  AT在一阶段的时候直接提交
+- XA的依赖数据库的回滚机制  AT依赖数据快照回滚
 
 
 
@@ -336,15 +477,37 @@ RM的主要任务是向TC注册分支事务、报告事务状态（实际的执�
 
 
 
-### AT
-
-
-
 
 
 ### SAGA
 
 
+
+
+
+## 核心部份
+
+
+
+### @GlobalTransactional
+
+属性
+
+1. name：事务名称，用于区分不同的事务，默认值为全类名加上方法名。
+2. timeoutMills：事务超时时间，单位为毫秒，默认值为 -1，表示不设置超时时间。
+3. rollbackFor：回滚异常类型数组，表示遇到该数组中的异常类型时，回滚事务。
+   默认值为 `{Throwable.class}`，表示遇到任何异常时都回滚事务。
+4. noRollbackFor：不回滚异常类型数组，表示遇到该数组中的异常类型时，不回滚事务。
+   默认值为空数组，表示遇到任何异常都回滚事务。
+5. propagation：事务传播级别 表示事务的传播方式
+   默认值为 Propagation.REQUIRED 即当前方法必须运行在事务中
+   其他传播级别包括：
+   - Propagation.REQUIRES_NEW：当前方法必须运行在新的事务中，如果当前已存在事务，则该事务挂起。
+   - Propagation.SUPPORTS：当前方法可以运行在事务中，也可以不运行在事务中。如果当前没有事务，则不开启事务。
+   - Propagation.NOT_SUPPORTED：当前方法不运行在事务中，如果当前存在事务，则将事务挂起。
+   - Propagation.MANDATORY：当前方法必须运行在事务中，如果当前没有事务，则抛出异常。
+   - Propagation.NEVER：当前方法不允许运行在事务中，如果当前存在事务，则抛出异常。
+   - Propagation.NESTED：当前方法必须运行在嵌套事务中，如果当前没有事务，则新开启一个嵌套事务。如果已存在事务，则将该事务嵌套在当前事务中。
 
 
 

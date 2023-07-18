@@ -56,6 +56,7 @@ public class StockController {
                     .total(stock.getTotal() - order.getQuantity())
                     .build();
             flag = iStockService.update(build, updateWrapper);
+            throw new Exception();
         }
         return flag;
     }
