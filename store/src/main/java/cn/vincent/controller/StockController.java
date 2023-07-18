@@ -12,6 +12,7 @@ import com.alibaba.csp.sentinel.slots.block.AbstractRule;
 import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import io.seata.spring.annotation.GlobalTransactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,20 +44,20 @@ public class StockController {
      */
     @PostMapping("/deductionInventory")
     @SentinelResource(value = "deductionInventory")
-    public String deductionInventory(@RequestBody Order order) {
+    public Boolean deductionInventory(@RequestBody Order order) throws Exception {
         Boolean flag = false;
         QueryWrapper<Stock> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("id", order.getId());
+        queryWrapper.eq("product_id", order.getProductId());
         Stock stock = iStockService.getOne(queryWrapper);
         if (ObjectUtil.isNotEmpty(stock)) {
             UpdateWrapper updateWrapper = new UpdateWrapper();
-            updateWrapper.eq("id", order.getId());
+            updateWrapper.eq("product_id", order.getProductId());
             Stock build = Stock.builder()
                     .total(stock.getTotal() - order.getQuantity())
                     .build();
             flag = iStockService.update(build, updateWrapper);
         }
-        return flag.toString();
+        return flag;
     }
 
     @PostMapping("/getStock")
@@ -89,8 +90,20 @@ public class StockController {
         String resource = rule.getResource();
         return resource + "限流了";
     }
+
     //endregion
 
+
+    //region seata 测试
+
+    /**
+     * 添加库存
+     *
+     * @param proName
+     * @param total
+     * @return
+     */
+    @GlobalTransactional
     @GetMapping("/addStock/{proName}/{total}")
     public String addStock(@PathVariable("proName") String proName, @PathVariable("total") Integer total) {
         QueryWrapper<Product> productQueryWrapper = new QueryWrapper<>();
@@ -107,4 +120,5 @@ public class StockController {
         } else
             return Boolean.FALSE.toString();
     }
+    //endregion
 }

@@ -18,5 +18,8 @@ spring:
           - data-id: my-data.yaml
             group: DEFAULT_GROUP
             refresh: true
+          - data-id: seata.yaml
+            group: SEATA_GROUP
+            refresh: true
       discovery:
         namespace: seata

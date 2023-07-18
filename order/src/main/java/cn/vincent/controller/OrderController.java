@@ -6,6 +6,7 @@ import cn.vincent.feign.StockFeignService;
 import cn.vincent.service.IOrderService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.seata.spring.annotation.GlobalTransactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +35,7 @@ public class OrderController {
     }
 
     @GetMapping("/add")
+    @GlobalTransactional()
     public String addOrder() {
         Order build = Order.builder()
                 .productId(1)
@@ -42,7 +44,9 @@ public class OrderController {
                 .price(new BigDecimal(30))
                 .totalPrice(new BigDecimal(60))
                 .build();
+        // 添加订单
         Boolean save = iOrderService.save(build);
+        // 调用仓库服务 扣减库存
         stockFeignService.deductionInventory(build);
         return save.toString();
     }

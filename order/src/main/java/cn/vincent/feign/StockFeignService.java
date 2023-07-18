@@ -14,7 +14,7 @@ import java.util.List;
 public interface StockFeignService {
 
     @PostMapping("/deductionInventory")
-    String deductionInventory(@RequestBody Order order);
+    Boolean deductionInventory(@RequestBody Order order);
 
     @PostMapping("/getStock")
     List<Stock> getStock();

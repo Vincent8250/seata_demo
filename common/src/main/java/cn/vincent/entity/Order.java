@@ -3,8 +3,10 @@ package cn.vincent.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -18,6 +20,8 @@ import java.math.BigDecimal;
  * @since 2023-07-09
  */
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @TableName("order_0")
 public class Order implements Serializable {
 
