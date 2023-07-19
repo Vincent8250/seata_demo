@@ -153,7 +153,7 @@ base理论时对cap的以重解决思路 包含三个思想
    store.db.maxWait= 5000
    ~~~
 
-3. 建立数据库表 参考文件  [脚本文件](script/seata - mysql.sql) || [GitHub 地址](https://github.com/seata/seata/blob/develop/script/server/db/mysql.sql)
+3. 建立数据库表 （表建立在TC关联数据库中） 参考文件  [脚本文件](script/seata - mysql.sql) || [GitHub 地址](https://github.com/seata/seata/blob/develop/script/server/db/mysql.sql)
 
    ~~~sql
    -- the table to store GlobalSession data
@@ -237,6 +237,28 @@ base理论时对cap的以重解决思路 包含三个思想
    或
    seata-server.sh
    ~~~
+
+PS：undo_log脚本 AT模式需要使用undo_log表 （表建立在业务数据库中）
+
+~~~sql
+CREATE TABLE `undo_log` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `branch_id` bigint(20) NOT NULL,
+  `xid` varchar(100) NOT NULL,
+  `context` varchar(128) NOT NULL,
+  `rollback_info` longblob NOT NULL,
+  `log_status` int(11) NOT NULL,
+  `log_created` datetime NOT NULL,
+  `log_modified` datetime NOT NULL,
+  `ext` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_undo_log` (`xid`,`branch_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+~~~
+
+
+
+
 
 
 
@@ -443,6 +465,14 @@ RM的主要任务是向TC注册分支事务、报告事务状态（实际的执�
 
 AT模式下 RM管理器中资源会直接提交 不用等待所有资源都提交
 
+- 优点
+  - 一阶段直接提交数据库 释放资源 性能较好
+  - 利用全局锁实现读写隔离
+  - 没有代码侵入 框架自动完成提交、回滚
+- 缺点
+  - 两阶段之间属于软状态 可能出现脏读问题 追求的是最终一致性
+  - 快照功能、全局锁会影响性能 （相比XA模式提高了很多）
+
 
 
 #### AT模型
@@ -464,14 +494,115 @@ AT模式下 RM管理器中资源会直接提交 不用等待所有资源都提�
 - XA是追求强一致性  AT是追求结果一致性
 - XA在一阶段的时候不提交  AT在一阶段的时候直接提交
 - XA的依赖数据库的回滚机制  AT依赖数据快照回滚
+- XA模式下 数据库会对操作数据加锁 比较影响效率
+  AT模式下 会加一个全局锁 但是全局锁是由TC管理 而不是数据库 且全局锁的粒度更小 影响更小
 
 
 
+#### 读写隔离
 
+原因：在数据修改后 因为AT模式是直接提交数据 所以可能在二阶段提交之前 被其他事务修改了数据
+而二阶段如果回滚数据 则可能出现脏写的问题 （覆盖事务2的操作 造成数据异常）
+
+![image-20230719215056219](img/image-20230719215056219.png)
+
+解决方案 - 全局锁：针对上述的脏写问题 seata 提供了全局锁机制 在事务一阶段执行后提交前 需要获取全局锁
+在TC中记录当前事务操作的行数据 表明行数据被当前事务所持有
+
+![image-20230719215511366](img/image-20230719215511366.png)
+
+seata管理以外的修改 全局锁无效 所以理论上还是会出现脏写的问题
+针对这种情况seata在记录数据快照的时候记录了两份（一份是修改前 | 一份是修改后）
+在事务回滚前 对比修改后的数据 如果不相同说明期间数据被其他操作修改了 需要标注异常 发出警告
+
+![image-20230719220545929](img/image-20230719220545929.png)
+
+
+
+#### 代码实现
+
+基于上面的XA模式实现 AT模式基本不用做改动 修改一下配置文件 并建立undo_log表就可以了
+
+![image-20230719225129354](img/image-20230719225129354.png)
+
+~~~sql
+CREATE TABLE `undo_log` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `branch_id` bigint(20) NOT NULL,
+  `xid` varchar(100) NOT NULL,
+  `context` varchar(128) NOT NULL,
+  `rollback_info` longblob NOT NULL,
+  `log_status` int(11) NOT NULL,
+  `log_created` datetime NOT NULL,
+  `log_modified` datetime NOT NULL,
+  `ext` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_undo_log` (`xid`,`branch_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+~~~
+
+校验方法：
+
+在服务提供方主动抛出一个异常
+把断点打在服务调用者执行sql语句之后 服务提供方抛出异常之前
+在这之间 就可以在数据库中看到数据已经提交
+异常抛出后 数据又回滚了 比较简单就不做演示了
 
 
 
 ### TCC
+
+#### 概念
+
+不需要加锁 与AT模式相似 **每阶段都是独立的事务 直接提交**
+不同的是TCC需要通过人工编码来实现数据恢复
+需要实现三个方法：
+
+1. Try：资源的检测和预留
+2. Confirm：完成资源操作业务 要求try成功confirm一定成功
+3. Cancel：预留资源释放 可以理解为try的反向操作
+
+- 优点
+  - 一阶段直接提交事务 释放数据资源 性能好
+  - 相比AT模式 不生成数据库快照 无需全局锁 性能最强
+  - 不依赖数据库事务 而是依赖补偿操作 可以作用于非事务型数据
+- 缺点
+  - 代码侵入 需要人为编写补偿操作 太麻烦
+  - 软状态 事务是最终一致
+  - 需要考虑confirm和cancel失败的情况 （失败seata会有重试操作 所以要做幂等处理）
+    保证程序的健壮性
+
+
+
+
+
+
+
+#### TCC模型
+
+一阶段的时候 预留出需要操作的资源
+
+二阶段 资源预留成功 提交资源操作（保证操作一定成功）
+而极端 资源预留失败 退回预留资源
+
+TCC模式和AT模式一样都是直接提交 不加锁 所以性能高
+不过TCC模式没有AT模式的脏读问题 因为他是直接预留了操作资源 
+
+下图是一个TCC模式的示例：
+
+![image-20230719234522975](img/image-20230719234522975.png)
+
+工作模型：
+
+- 一阶段
+  - 预留资源：Try
+- 二阶段
+  - 提交：confirm
+  - 回滚：cancel
+
+两段操作都是直接提交
+
+![image-20230719235322491](img/image-20230719235322491.png)
 
 
 
